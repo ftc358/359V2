@@ -64,10 +64,33 @@ public class Robot {
         exh.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
 
         //Fetch and Configure Drive Motors
+        /*
+        Control Hub:
+        M0: leftFront
+        M1  leftBack
+        M2  rightBack
+        M3  rightFront
+
+        S0: diffy1
+        S1: diffy2
+        S2:
+        S3: intakeWrist
+        S4: intakePivot1
+        S5: intakePivot2
+
+        D0: outtakeTouch
+        I2CB0: imu BHI
+        I2CB2: backDistance
+
+
+         */
+
         leftFront = hardwareMap.get(DcMotorEx.class,"leftFront");
         leftBack = hardwareMap.get(DcMotorEx.class,"leftBack");
         rightFront = hardwareMap.get(DcMotorEx.class,"rightFront");
         rightBack = hardwareMap.get(DcMotorEx.class,"rightBack");
+
+        rightFront.setDirection(DcMotorSimple.Direction.REVERSE);
 
         leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
         leftBack.setDirection(DcMotorSimple.Direction.REVERSE);

@@ -1,6 +1,14 @@
 package org.firstinspires.ftc.teamcode.auto;
 //package org.firstinspires.ftc.robotcontroller.external.samples;
 
+import static org.firstinspires.ftc.teamcode.hardware.Robot.claw1;
+import static org.firstinspires.ftc.teamcode.hardware.RobotConstants.claw2GrabPos;
+import static org.firstinspires.ftc.teamcode.hardware.RobotConstants.claw2ReleasePos;
+import static org.firstinspires.ftc.teamcode.hardware.RobotConstants.clawGrabPos;
+import static org.firstinspires.ftc.teamcode.hardware.RobotConstants.clawReleasePos;
+import static org.firstinspires.ftc.teamcode.hardware.RobotConstants.diffyDropPos;
+import static org.firstinspires.ftc.teamcode.hardware.RobotConstants.diffyHoldPos;
+
 import com.acmerobotics.dashboard.config.Config;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
@@ -11,6 +19,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.hardware.Robot;
 
@@ -27,6 +36,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
+import java.lang.Math;
 
 @Config
 @Autonomous
@@ -34,7 +44,7 @@ public class TestAuto extends LinearOpMode {
 
     // PID constants for turning
     public static double turnKp = 0.6; //tuned 1/31
-    public static double turnKi = 0.025; //tuned 1/31
+    public static double turnKi = 0.03; //tuned 2/2
     public static double turnKd = 0.0175; //tuned 1/31
     // PID constants for forward/back
     public static double Kp_dist = 0.1; //tuned 2/1
@@ -56,11 +66,10 @@ public class TestAuto extends LinearOpMode {
     public static double PIDOUTPUTSCALE = 60; //tuned 1/29
 
     // hardware variables
-    public DcMotorEx leftFront = null;
-    public DcMotorEx leftBack = null;
-    public DcMotorEx rightFront = null;
-    public DcMotorEx rightBack = null;
+    public DcMotorEx leftFront, leftBack, rightFront, rightBack;
     public BHI260IMU imu = null;
+    public Servo claw1, claw2, diffy1,diffy2,wrist1,wrist2,intakePivot1,intakePivot2,intakeWrist;
+    public DcMotorEx intake, horExt, lift;
 
     // don't touch (ㆆ_ㆆ)
     private double turn_previousError = 0;      //don't touch (ㆆ_ㆆ)
@@ -73,7 +82,6 @@ public class TestAuto extends LinearOpMode {
     private double integralHeading = 0;         //don't touch (ㆆ_ㆆ)
 
     //
-    private static final boolean USE_WEBCAM = true;  // Set true to use a webcam, or false for a phone camera
     private static final int DESIRED_TAG_ID = -1;     // Choose the tag you want to approach or set to -1 for ANY tag.
     private VisionPortal visionPortal;               // Used to manage the video source.
     private AprilTagProcessor aprilTag;              // Used for managing the AprilTag detection process.
@@ -85,21 +93,30 @@ public class TestAuto extends LinearOpMode {
     public void runOpMode() throws InterruptedException {
 
         // init phase
-        while (opModeInInit()) {
-            leftFront = hardwareMap.get(DcMotorEx.class, "leftFront");
-            leftBack = hardwareMap.get(DcMotorEx.class, "leftBack");
-            rightFront = hardwareMap.get(DcMotorEx.class, "rightFront");
-            rightBack = hardwareMap.get(DcMotorEx.class, "rightBack");
+        if (opModeInInit()) {
+            Robot robot = new Robot(hardwareMap);
+            leftFront = robot.leftFront;
+            rightFront = robot.rightFront;
+            leftBack = robot.leftBack;
+            rightBack = robot.rightBack;
 
-            leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
-            leftBack.setDirection(DcMotorSimple.Direction.REVERSE);
 
-            leftFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-            leftBack.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-            rightFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-            rightBack.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+//            leftFront = hardwareMap.get(DcMotorEx.class, "leftFront");
+//            leftBack = hardwareMap.get(DcMotorEx.class, "leftBack");
+//            rightFront = hardwareMap.get(DcMotorEx.class, "rightFront");
+//            rightBack = hardwareMap.get(DcMotorEx.class, "rightBack");
+//
+//            leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
+//            leftBack.setDirection(DcMotorSimple.Direction.REVERSE);
+//
+//            leftFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+//            leftBack.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+//            rightFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+//            rightBack.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-            imu = hardwareMap.get(BHI260IMU.class, "imu");
+//            imu = hardwareMap.get(BHI260IMU.class, "imu");
+
+            imu = robot.imu;
             imu.resetYaw();
 
             leftFront.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
@@ -107,15 +124,48 @@ public class TestAuto extends LinearOpMode {
             rightFront.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
             rightBack.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
+            claw1 = robot.claw1;
+            claw2 = robot.claw2;
+
+            diffy1 = robot.diffy1;
+            diffy2 = robot.diffy2;
+
+            wrist1 = robot.wrist1;
+            wrist2 = robot.wrist2;
+
+            lift = robot.lift;
+            horExt = robot.horExt;
+            intake = robot.intake;
+
+            intakeWrist = robot.intakeWrist;
+            intakePivot1 = robot.intakePivot1;
+            intakePivot2 = robot.intakePivot2;
 
             initAprilTag();
-            if (USE_WEBCAM)
-                setManualExposure(6, 250);  // Use low exposure time to reduce motion blur
+            setManualExposure(6, 250);
+
+            //grab();
+            //diffyHome();
         }
+
+        waitForStart();
 
         // run auton here!! ٩(˘◡˘ )
         if (isStarted()) {
-            far_red_right();
+            imu.resetYaw();
+            imu.initialize();
+            telemetry.addData("0", lookyTag(5, 0));
+            telemetry.addData("1", lookyTag(5, 1));
+            telemetry.addData("2", lookyTag(5, 2));
+            telemetry.update();
+
+            double distance = lookyTag(5, 0);
+            double angle = lookyTag(5, 1);
+            double strafeDist = distance * Math.sin(angle);
+            robot_turn(angle);
+            sleep(1000);
+            robot_strafe(strafeDist, 0.5);
+            sleep(4000);
         }
     }
 
@@ -177,6 +227,12 @@ public class TestAuto extends LinearOpMode {
         robot_turn(-86);
         sleep(150);
         robot_move(-86, 0.5);
+        sleep(150);
+        diffyBoard();
+
+
+
+
     }
     public void far_blue_middle(){
         robot_move(-30, 0.5);
@@ -190,6 +246,7 @@ public class TestAuto extends LinearOpMode {
         robot_turn(92);
         sleep(150);
         robot_move(-96, 0.5);
+        diffyBoard();
     }
     public void far_blue_right(){
         robot_move(-20, 0.5);
@@ -404,6 +461,27 @@ public class TestAuto extends LinearOpMode {
         integralHeading = 0;
     }
 
+    // Subsystem Functions
+    public void grab(){
+        claw1.setPosition(clawGrabPos);
+        claw2.setPosition(claw2GrabPos);
+    }
+    public void release(){
+        claw1.setPosition(clawReleasePos);
+        claw2.setPosition(claw2ReleasePos);
+    }
+    public void diffyHome(){
+        diffy1.setPosition(diffyHoldPos);
+        diffy2.setPosition(diffyHoldPos);
+    }
+    public void diffyBoard(){
+        diffy1.setPosition(diffyDropPos);
+        diffy2.setPosition(diffyDropPos);
+    }
+    public void diffyLeft(){}
+    public void diffyRight(){}
+
+
     //apriltag stuff --- --- --- --- --- --- --- --- --- --- ---
     private void initAprilTag() {
         // Create the AprilTag processor by using a builder.
@@ -416,23 +494,17 @@ public class TestAuto extends LinearOpMode {
         // Decimation = 3 ..  Detect 2" Tag from 4  feet away at 30 Frames Per Second
         // Decimation = 3 ..  Detect 5" Tag from 10 feet away at 30 Frames Per Second
         // Note: Decimation can be changed on-the-fly to adapt during a match.
-        aprilTag.setDecimation(2);
+        aprilTag.setDecimation(3);
 
         // Create the vision portal by using a builder.
-        if (USE_WEBCAM) {
+        // Create the vision portal by using a builder.
             visionPortal = new VisionPortal.Builder()
                     .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
                     .addProcessor(aprilTag)
                     .build();
-        } else {
-            visionPortal = new VisionPortal.Builder()
-                    .setCamera(BuiltinCameraDirection.BACK)
-                    .addProcessor(aprilTag)
-                    .build();
-        }
     }
 
-    private void    setManualExposure(int exposureMS, int gain) {
+    private void setManualExposure(int exposureMS, int gain) {
         // Wait for the camera to be open, then use the controls
 
         if (visionPortal == null) {
@@ -441,7 +513,7 @@ public class TestAuto extends LinearOpMode {
 
         // Make sure camera is streaming before we try to set the exposure controls
         if (visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING) {
-            telemetry.addData("Camera", "Waiting");
+            telemetry.addData("Camera", "Not Ready");
             telemetry.update();
             while (!isStopRequested() && (visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING)) {
                 sleep(20);
@@ -466,47 +538,50 @@ public class TestAuto extends LinearOpMode {
         }
     }
 
-    public List<Double> lookyTag(){
+    public double lookyTag(int tagID, int tagReading){
         targetFound = false;
         desiredTag  = null;
-        double maxloop = 1000;
-        double currentLoop = 0;
 
-        while (currentLoop < maxloop) {
-
-            // Step through the list of detected tags and look for a matching tag
-            List<AprilTagDetection> currentDetections = aprilTag.getDetections();
-            for (AprilTagDetection detection : currentDetections) {
-                // Look to see if we have size info on this tag.
-                if (detection.metadata != null) {
-                    //  Check to see if we want to track towards this tag.
-                    if ((DESIRED_TAG_ID < 0) || (detection.id == DESIRED_TAG_ID)) {
-                        // Yes, we want to use this tag.
-                        targetFound = true;
-                        desiredTag = detection;
-                        break;  // don't look any further.
-                    } else {
-                        // This tag is in the library, but we do not want to track it right now.
-                        telemetry.addData("Skipping", "Tag ID %d is not desired", detection.id);
-                    }
+        // Step through the list of detected tags and look for a matching tag
+        List<AprilTagDetection> currentDetections = aprilTag.getDetections();
+        for (AprilTagDetection detection : currentDetections) {
+            // Look to see if we have size info on this tag.
+            if (detection.metadata != null) {
+                //  Check to see if we want to track towards this tag.
+                if ((DESIRED_TAG_ID < 0) || (detection.id == tagID)) {
+                    // Yes, we want to use this tag.
+                    targetFound = true;
+                    desiredTag = detection;
+                    break;  // don't look any further.
                 } else {
-                    // This tag is NOT in the library, so we don't have enough information to track to it.
-                    telemetry.addData("Unknown", "Tag ID %d is not in TagLibrary", detection.id);
+                    // This tag is in the library, but we do not want to track it right now.
+                    telemetry.addData("Skipping", "Tag ID %d is not desired", detection.id);
                 }
-                telemetry.update();
+            } else {
+                // This tag is NOT in the library, so we don't have enough information to track to it.
+                telemetry.addData("Unknown", "Tag ID %d is not in TagLibrary", detection.id);
             }
-            if (targetFound == true) break;
-            currentLoop += 1;
+            telemetry.update();
         }
 
-        double  rangeError      = desiredTag.ftcPose.range;
-        double  headingError    = desiredTag.ftcPose.bearing;
-        double  yawError        = desiredTag.ftcPose.yaw;
+        double output = 0;
+        if (targetFound){
+            double  rangeError      = desiredTag.ftcPose.range;
+            double  headingError    = desiredTag.ftcPose.bearing;
+            double  yawError        = desiredTag.ftcPose.yaw;
+            switch (tagReading){
+                case 0:
+                    output = rangeError;
+                    break;
+                case 1:
+                    output = headingError;
+                    break;
+                case 2:
+                    output = yawError;
+                    break;
+            }
+        }
 
-        List<Double> aprilValues = new ArrayList<>();
-        aprilValues.add(rangeError);
-        aprilValues.add(headingError);
-        aprilValues.add(yawError);
-        return aprilValues;
+        return output;
     }
 }
